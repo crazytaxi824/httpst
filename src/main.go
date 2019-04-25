@@ -39,7 +39,7 @@ func main() {
 	//*body = "id=1&name=lq"
 	//*method = "get"
 
-	*urlReq = "www.baidu.com"
+	//*urlReq = "www.baidu.com"
 	//*urlReq = "http://test.koudejun.com/api/1/v1/item/u/item/list?page=1&pageSize=6"
 	//*urlReq = "http://127.0.0.1:18080/test"
 	//*urlReq := "http://192.168.2.250:20004/item/u/item/list?page=1&pageSize=6"
