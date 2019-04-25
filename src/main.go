@@ -39,7 +39,7 @@ func main() {
 	//*body = "id=1&name=lq"
 	//*method = "get"
 
-	//*urlReq = "http://www.baidu.com"
+	//*urlReq = "baidu.com"
 	//*urlReq = "http://test.koudejun.com/api/1/v1/item/u/item/list?page=1&pageSize=6"
 	//*urlReq = "http://127.0.0.1:18080/test"
 	//*urlReq := "http://192.168.2.250:20004/item/u/item/list?page=1&pageSize=6"
@@ -52,9 +52,15 @@ func main() {
 		return
 	}
 
-	if *urlReq == "" {
+	rawUrl := strings.TrimSpace(*urlReq)
+	if rawUrl == "" {
 		fmt.Println("请求路径不能为空")
 		return
+	}
+	if len(rawUrl) < 8 {
+		rawUrl = "http://" + rawUrl
+	} else if rawUrl[:7] != "http://" || rawUrl[:8] != "https://" {
+		rawUrl = "http://" + rawUrl
 	}
 
 	showData = *sd
@@ -95,7 +101,7 @@ func main() {
 	for i < *users {
 		waitReq.Add(1)
 		// 发送请求
-		go httpGet(*urlReq, headerKVSlice, *method, *body, maxMinValue, addTxCount)
+		go httpGet(rawUrl, headerKVSlice, *method, *body, maxMinValue, addTxCount)
 		i++
 	}
 
