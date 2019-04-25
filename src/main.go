@@ -187,9 +187,9 @@ func httpGet(urlReq string, headerKVSlice [][2]string, method string, body strin
 
 	// 打印结果
 	if req.URL.RawQuery != "" {
-		fmt.Println(req.Proto, "| code:", resp.StatusCode, "|", diffTime, "秒", "==>", req.Method, req.Host+req.URL.Path+"?"+req.URL.RawQuery)
+		fmt.Println(req.Proto, "| code:", resp.StatusCode, "|", fmt.Sprintf("%.3f", diffTime)+" 秒", "==>", req.Method, req.Host+req.URL.Path+"?"+req.URL.RawQuery)
 	} else {
-		fmt.Println(req.Proto, "| code:", resp.StatusCode, "|", diffTime, "秒", "==>", req.Method, req.Host+req.URL.Path)
+		fmt.Println(req.Proto, "| code:", resp.StatusCode, "|", fmt.Sprintf("%.3f", diffTime)+" 秒", "==>", req.Method, req.Host+req.URL.Path)
 	}
 
 	// 统计成功和失败
