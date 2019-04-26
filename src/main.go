@@ -183,10 +183,7 @@ func main() {
 func httpSendRequest(reqData RequestContext, signal Signal) {
 	defer waitReq.Done()
 
-	// 开始计时
-	startTime := time.Now()
-
-	// 开始请求
+	// 准备请求
 	client := http.Client{}
 	req, err := http.NewRequest(reqData.Method, reqData.RawUrl, strings.NewReader(reqData.Body))
 	if err != nil {
@@ -203,6 +200,10 @@ func httpSendRequest(reqData RequestContext, signal Signal) {
 		req.Header.Add(v[0], v[1])
 	}
 
+	// 开始计时
+	startTime := time.Now()
+
+	// 开始请求
 	resp, err := client.Do(req)
 
 	// 统计总请求数量
