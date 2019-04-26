@@ -11,6 +11,7 @@ import (
 )
 
 var (
+	TotalRequest        int     // 总请求数量
 	FailedTransactions  int     // 请求失败的次数
 	SuccessRate         float64 // 成功率
 	TransactionRate     float64 // 平均每秒处理请求数 = 总请求次数/总耗时
@@ -89,12 +90,13 @@ func main() {
 	// -----------------
 
 	maxMinValue := make(chan float64)
-	//addTxCount := make(chan bool)
 	failedTransactions := make(chan bool)
+	totalRequest := make(chan bool)
 
-	waitStats.Add(2)
+	waitStats.Add(3)
 	go replaceMaxMinValue(maxMinValue)
 	go failedTransactionCount(failedTransactions)
+	go totalRequestCount(totalRequest)
 
 	startTime := time.Now()
 
@@ -102,7 +104,7 @@ func main() {
 	for i < *users {
 		waitReq.Add(1)
 		// 发送请求
-		go httpGet(rawUrl, *method, *body, headerKVSlice, maxMinValue, failedTransactions)
+		go httpSendRequest(rawUrl, *method, *body, headerKVSlice, maxMinValue, totalRequest, failedTransactions)
 		i++
 	}
 
@@ -114,6 +116,7 @@ func main() {
 	// 关闭chan
 	close(maxMinValue)
 	close(failedTransactions)
+	close(totalRequest)
 
 	// 等待监听服务退出
 	waitStats.Wait()
@@ -121,15 +124,15 @@ func main() {
 	// 总耗时
 	ElapsedTime = endTime.Sub(startTime).Seconds()
 	// 成功请求数量
-	SuccessTransactions := *users - uint(FailedTransactions)
+	SuccessTransactions := TotalRequest - FailedTransactions
 	// 成功率
-	SuccessRate = float64(SuccessTransactions) / float64(*users) * 100
+	SuccessRate = float64(SuccessTransactions) / float64(TotalRequest) * 100
 
 	// 每秒处理次数
-	TransactionRate = float64(*users) / ElapsedTime
+	TransactionRate = float64(TotalRequest) / ElapsedTime
 
 	fmt.Println()
-	fmt.Println("总请求数量:                     ", *users, "次")
+	fmt.Println("总请求数量:                     ", TotalRequest, "次")
 	fmt.Println("成功请求数量: 	                ", SuccessTransactions, "次")
 
 	if FailedTransactions > 0 {
@@ -149,10 +152,10 @@ func main() {
 	fmt.Println("最短耗时:     	                ", fmt.Sprintf("%.3f", ShortestTransaction)+" 秒")
 	fmt.Println("总耗时:       	                ", fmt.Sprintf("%.3f", ElapsedTime)+" 秒")
 	fmt.Println()
-	//fmt.Printf("\n %c[1;40;33m%s%c[0m\n\n", 0x1B, "testPrintColor", 0x1B)
+
 }
 
-func httpGet(urlReq, method, body string, headerKVSlice [][2]string, maxMinValue chan<- float64, failedTransactions chan<- bool) {
+func httpSendRequest(urlReq, method, body string, headerKVSlice [][2]string, maxMinValue chan<- float64, totalRequest, failedTransactions chan<- bool) {
 	defer waitReq.Done()
 
 	// 开始计时
@@ -161,7 +164,6 @@ func httpGet(urlReq, method, body string, headerKVSlice [][2]string, maxMinValue
 	// 开始请求
 	client := http.Client{}
 	m := strings.ToUpper(strings.TrimSpace(method))
-	//req, err := http.NewRequest(m, urlReq, body)
 	req, err := http.NewRequest(m, urlReq, strings.NewReader(body))
 	if err != nil {
 		fmt.Printf("%c[1;40;33m%s%c[0m\n", 0x1B, "Request ERROR: "+err.Error(), 0x1B)
@@ -176,8 +178,8 @@ func httpGet(urlReq, method, body string, headerKVSlice [][2]string, maxMinValue
 	for _, v := range headerKVSlice {
 		req.Header.Add(v[0], v[1])
 	}
-	//req.Header.Add("x-user-token", "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJvbkRUWDVYdzRmaU9OYUExQTBKNUZiRGNCeXo0IiwidW5pcXVlTmFtZSI6Im9uRFRYNVh3NGZpT05hQTFBMEo1RmJEY0J5ejQiLCJpZCI6IjExMTg4MTIxMjQ2MDk1MTU1MjAiLCJuYW1lIjoiTVJIIiwiZXhwIjoxNTU2MTA3NzkxfQ.XsmiYyS1ualsT6QyTdR6uSUPK5A3DbgLz9DJFLQKt6CMCmlw1pIr_uVLSs0IscdftvQK6l7Pw1PlTTuWiYVVzRrNROlvrtfdPtn_4l1JUVZMSFBOyx2uE7_BlHzCmStGrRG_x2PgG8rHbbpO-XXphVhN6Ln3lPnZhi5aARIWxAY")
 	resp, err := client.Do(req)
+	totalRequest <- true
 	if err != nil {
 		// 统计请求失败数量
 		failedTransactions <- true
@@ -252,6 +254,21 @@ func failedTransactionCount(ch <-chan bool) {
 			}
 
 			FailedTransactions += 1
+		}
+	}
+}
+
+func totalRequestCount(ch <-chan bool) {
+	defer waitStats.Done()
+
+	for {
+		select {
+		case _, ok := <-ch:
+			if !ok {
+				return
+			}
+
+			TotalRequest += 1
 		}
 	}
 }
