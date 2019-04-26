@@ -24,6 +24,21 @@ var (
 	showData  bool           // 是否显示返回数据
 )
 
+// 通道组
+type Signal struct {
+	MaxMinValue        chan float64
+	FailedTransactions chan bool
+	TotalRequest       chan bool
+}
+
+// 请求数据
+type RequestContext struct {
+	RawUrl        string
+	Method        string
+	Body          string
+	HeaderKVSlice [][2]string
+}
+
 func main() {
 	users := flag.Uint("c", 1, "并发次数")
 	urlReq := flag.String("r", "", "请求路径 eg:http://www.baidu.com")
@@ -37,9 +52,10 @@ func main() {
 	//*header = "x-user-token:eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJvbkRUWDVYdzRmaU9OYUExQTBKNUZiRGNCeXo0IiwidW5pcXVlTmFtZSI6Im9uRFRYNVh3NGZpT05hQTFBMEo1RmJEY0J5ejQiLCJpZCI6IjExMTg4MTIxMjQ2MDk1MTU1MjAiLCJuYW1lIjoiTVJIIiwiZXhwIjoxNTU2MTA3NzkxfQ.XsmiYyS1ualsT6QyTdR6uSUPK5A3DbgLz9DJFLQKt6CMCmlw1pIr_uVLSs0IscdftvQK6l7Pw1PlTTuWiYVVzRrNROlvrtfdPtn_4l1JUVZMSFBOyx2uE7_BlHzCmStGrRG_x2PgG8rHbbpO-XXphVhN6Ln3lPnZhi5aARIWxAY"
 	//*body = "id=1&name=lq"
 	//*method = "post"
-	//*users = 800
+	//*users = 10
+	//*sd = true
 
-	//*urlReq = "127.0.0.1:18080/test"
+	//*urlReq = "127.0.0.1:18080/post/123"
 	//*urlReq = "www.baidu.com"
 	//*urlReq = "http://test.koudejun.com/api/1/v1/item/u/item/list?page=1&pageSize=6"
 	//*urlReq = "http://127.0.0.1:18080/test"
@@ -53,21 +69,24 @@ func main() {
 		return
 	}
 
-	rawUrl := strings.TrimSpace(*urlReq)
-	if rawUrl == "" {
+	showData = *sd
+
+	// 接受数据
+	var reqData RequestContext
+
+	// 获取 rawUrl
+	reqData.RawUrl = strings.TrimSpace(*urlReq)
+	if reqData.RawUrl == "" {
 		fmt.Println("请求路径不能为空")
 		return
 	}
-	if len(rawUrl) < 8 {
-		rawUrl = "http://" + rawUrl
-	} else if rawUrl[:7] != "http://" && rawUrl[:8] != "https://" {
-		rawUrl = "http://" + rawUrl
+	if len(reqData.RawUrl) < 8 {
+		reqData.RawUrl = "http://" + reqData.RawUrl
+	} else if reqData.RawUrl[:7] != "http://" && reqData.RawUrl[:8] != "https://" {
+		reqData.RawUrl = "http://" + reqData.RawUrl
 	}
 
-	showData = *sd
-
-	// 处理请求数据
-	var headerKVSlice [][2]string
+	// 获取 header
 	if *header != "" {
 		headerSlice := strings.Split(*header, "&")
 
@@ -81,22 +100,28 @@ func main() {
 			var kvArray [2]string
 			kvArray[0] = kv[0]
 			kvArray[1] = kv[1]
-			headerKVSlice = append(headerKVSlice, kvArray)
+			reqData.HeaderKVSlice = append(reqData.HeaderKVSlice, kvArray)
 		}
+
 	} else {
-		headerKVSlice = nil
+		reqData.HeaderKVSlice = nil
 	}
 
-	// -----------------
+	// 获取body
+	reqData.Body = strings.TrimSpace(*body)
 
-	maxMinValue := make(chan float64)
-	failedTransactions := make(chan bool)
-	totalRequest := make(chan bool)
+	reqData.Method = strings.ToUpper(strings.TrimSpace(*method))
+
+	// -----------------
+	var signal Signal
+	signal.MaxMinValue = make(chan float64)
+	signal.FailedTransactions = make(chan bool)
+	signal.TotalRequest = make(chan bool)
 
 	waitStats.Add(3)
-	go replaceMaxMinValue(maxMinValue)
-	go failedTransactionCount(failedTransactions)
-	go totalRequestCount(totalRequest)
+	go replaceMaxMinValue(signal.MaxMinValue)
+	go failedTransactionCount(signal.FailedTransactions)
+	go totalRequestCount(signal.TotalRequest)
 
 	startTime := time.Now()
 
@@ -104,7 +129,7 @@ func main() {
 	for i < *users {
 		waitReq.Add(1)
 		// 发送请求
-		go httpSendRequest(rawUrl, *method, *body, headerKVSlice, maxMinValue, totalRequest, failedTransactions)
+		go httpSendRequest(reqData, signal)
 		i++
 	}
 
@@ -114,9 +139,9 @@ func main() {
 	endTime := time.Now()
 
 	// 关闭chan
-	close(maxMinValue)
-	close(failedTransactions)
-	close(totalRequest)
+	close(signal.MaxMinValue)
+	close(signal.FailedTransactions)
+	close(signal.TotalRequest)
 
 	// 等待监听服务退出
 	waitStats.Wait()
@@ -155,7 +180,7 @@ func main() {
 
 }
 
-func httpSendRequest(urlReq, method, body string, headerKVSlice [][2]string, maxMinValue chan<- float64, totalRequest, failedTransactions chan<- bool) {
+func httpSendRequest(reqData RequestContext, signal Signal) {
 	defer waitReq.Done()
 
 	// 开始计时
@@ -163,26 +188,28 @@ func httpSendRequest(urlReq, method, body string, headerKVSlice [][2]string, max
 
 	// 开始请求
 	client := http.Client{}
-	m := strings.ToUpper(strings.TrimSpace(method))
-	req, err := http.NewRequest(m, urlReq, strings.NewReader(body))
+	req, err := http.NewRequest(reqData.Method, reqData.RawUrl, strings.NewReader(reqData.Body))
 	if err != nil {
 		fmt.Printf("%c[1;40;33m%s%c[0m\n", 0x1B, "Request ERROR: "+err.Error(), 0x1B)
 		return
 	}
 
-	if m != "GET" {
+	if reqData.Method != "GET" {
 		req.Header.Add("Content-Type", "application/x-www-form-urlencoded;param=value")
 	}
 
 	// header
-	for _, v := range headerKVSlice {
+	for _, v := range reqData.HeaderKVSlice {
 		req.Header.Add(v[0], v[1])
 	}
+
 	resp, err := client.Do(req)
-	totalRequest <- true
+
+	// 统计总请求数量
+	signal.TotalRequest <- true
 	if err != nil {
 		// 统计请求失败数量
-		failedTransactions <- true
+		signal.FailedTransactions <- true
 
 		fmt.Printf("%c[1;40;31m%s%c[0m\n", 0x1B, "ERROR: "+err.Error(), 0x1B)
 		return
@@ -222,7 +249,7 @@ func httpSendRequest(urlReq, method, body string, headerKVSlice [][2]string, max
 	}
 
 	// 统计最长最短时间
-	maxMinValue <- diffTime
+	signal.MaxMinValue <- diffTime
 
 	return
 }
