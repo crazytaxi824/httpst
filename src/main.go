@@ -11,14 +11,12 @@ import (
 )
 
 var (
-	TotalTransactionCount int     // 总请求次数
-	SuccessTransactions   int     // 成功次数
-	FailedTransactions    int     // 失败次数
-	SuccessRate           float64 // 成功率
-	TransactionRate       float64 // 平均每秒处理请求数 = 总请求次数/总耗时
-	ElapsedTime           float64 // 总耗时
-	LongestTransaction    float64 // 最长耗时
-	ShortestTransaction   float64 // 最短耗时
+	FailedTransactions  int     // 请求失败的次数
+	SuccessRate         float64 // 成功率
+	TransactionRate     float64 // 平均每秒处理请求数 = 总请求次数/总耗时
+	ElapsedTime         float64 // 总耗时
+	LongestTransaction  float64 // 最长耗时
+	ShortestTransaction float64 // 最短耗时
 
 	waitReq   sync.WaitGroup // 等待请求完成
 	waitStats sync.WaitGroup // 等待监听服务完成
@@ -37,8 +35,10 @@ func main() {
 	// 测试用 ------------------
 	//*header = "x-user-token:eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJvbkRUWDVYdzRmaU9OYUExQTBKNUZiRGNCeXo0IiwidW5pcXVlTmFtZSI6Im9uRFRYNVh3NGZpT05hQTFBMEo1RmJEY0J5ejQiLCJpZCI6IjExMTg4MTIxMjQ2MDk1MTU1MjAiLCJuYW1lIjoiTVJIIiwiZXhwIjoxNTU2MTA3NzkxfQ.XsmiYyS1ualsT6QyTdR6uSUPK5A3DbgLz9DJFLQKt6CMCmlw1pIr_uVLSs0IscdftvQK6l7Pw1PlTTuWiYVVzRrNROlvrtfdPtn_4l1JUVZMSFBOyx2uE7_BlHzCmStGrRG_x2PgG8rHbbpO-XXphVhN6Ln3lPnZhi5aARIWxAY"
 	//*body = "id=1&name=lq"
-	//*method = "get"
+	//*method = "post"
+	//*users = 800
 
+	//*urlReq = "127.0.0.1:18080/test"
 	//*urlReq = "www.baidu.com"
 	//*urlReq = "http://test.koudejun.com/api/1/v1/item/u/item/list?page=1&pageSize=6"
 	//*urlReq = "http://127.0.0.1:18080/test"
@@ -89,11 +89,12 @@ func main() {
 	// -----------------
 
 	maxMinValue := make(chan float64)
-	addTxCount := make(chan bool)
+	//addTxCount := make(chan bool)
+	failedTransactions := make(chan bool)
 
 	waitStats.Add(2)
 	go replaceMaxMinValue(maxMinValue)
-	go addTransactionStats(addTxCount)
+	go failedTransactionCount(failedTransactions)
 
 	startTime := time.Now()
 
@@ -101,7 +102,7 @@ func main() {
 	for i < *users {
 		waitReq.Add(1)
 		// 发送请求
-		go httpGet(rawUrl, headerKVSlice, *method, *body, maxMinValue, addTxCount)
+		go httpGet(rawUrl, *method, *body, headerKVSlice, maxMinValue, failedTransactions)
 		i++
 	}
 
@@ -112,31 +113,33 @@ func main() {
 
 	// 关闭chan
 	close(maxMinValue)
-	close(addTxCount)
+	close(failedTransactions)
 
 	// 等待监听服务退出
 	waitStats.Wait()
 
 	// 总耗时
 	ElapsedTime = endTime.Sub(startTime).Seconds()
+	// 成功请求数量
+	SuccessTransactions := *users - uint(FailedTransactions)
 	// 成功率
-	SuccessRate = float64(SuccessTransactions) / float64(TotalTransactionCount) * 100
+	SuccessRate = float64(SuccessTransactions) / float64(*users) * 100
 
 	// 每秒处理次数
-	TransactionRate = float64(TotalTransactionCount) / ElapsedTime
+	TransactionRate = float64(*users) / ElapsedTime
 
 	fmt.Println()
-	fmt.Println("总请求数量:          ", TotalTransactionCount, "次")
-	fmt.Println("成功请求数量: 	     ", SuccessTransactions, "次")
-	fmt.Println("失败请求数量: 	     ", FailedTransactions, "次")
-	fmt.Println("请求成功率:          ", fmt.Sprintf("%.2f", SuccessRate)+" %")
-	fmt.Println("平均每秒处理请求数:  ", fmt.Sprintf("%.2f", TransactionRate)+" 次/秒")
-	fmt.Println("最长耗时:     	     ", fmt.Sprintf("%.3f", LongestTransaction)+" 秒")
-	fmt.Println("最短耗时:     	     ", fmt.Sprintf("%.3f", ShortestTransaction)+" 秒")
-	fmt.Println("总耗时:       	     ", fmt.Sprintf("%.3f", ElapsedTime)+" 秒")
+	fmt.Println("总请求数量:                     ", *users, "次")
+	fmt.Println("成功请求数量: 	                ", SuccessTransactions, "次")
+	fmt.Println("失败请求数量: 	                ", FailedTransactions, "次")
+	fmt.Println("请求成功率:                     ", fmt.Sprintf("%.2f", SuccessRate)+" %")
+	fmt.Println("平均每秒处理请求数:             ", fmt.Sprintf("%.2f", TransactionRate)+" 次/秒")
+	fmt.Println("最长耗时:     	                ", fmt.Sprintf("%.3f", LongestTransaction)+" 秒")
+	fmt.Println("最短耗时:     	                ", fmt.Sprintf("%.3f", ShortestTransaction)+" 秒")
+	fmt.Println("总耗时:       	                ", fmt.Sprintf("%.3f", ElapsedTime)+" 秒")
 }
 
-func httpGet(urlReq string, headerKVSlice [][2]string, method string, body string, maxMinValue chan<- float64, addTxCount chan<- bool) {
+func httpGet(urlReq, method, body string, headerKVSlice [][2]string, maxMinValue chan<- float64, failedTransactions chan<- bool) {
 	defer waitReq.Done()
 
 	// 开始计时
@@ -163,7 +166,8 @@ func httpGet(urlReq string, headerKVSlice [][2]string, method string, body strin
 	//req.Header.Add("x-user-token", "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJvbkRUWDVYdzRmaU9OYUExQTBKNUZiRGNCeXo0IiwidW5pcXVlTmFtZSI6Im9uRFRYNVh3NGZpT05hQTFBMEo1RmJEY0J5ejQiLCJpZCI6IjExMTg4MTIxMjQ2MDk1MTU1MjAiLCJuYW1lIjoiTVJIIiwiZXhwIjoxNTU2MTA3NzkxfQ.XsmiYyS1ualsT6QyTdR6uSUPK5A3DbgLz9DJFLQKt6CMCmlw1pIr_uVLSs0IscdftvQK6l7Pw1PlTTuWiYVVzRrNROlvrtfdPtn_4l1JUVZMSFBOyx2uE7_BlHzCmStGrRG_x2PgG8rHbbpO-XXphVhN6Ln3lPnZhi5aARIWxAY")
 	resp, err := client.Do(req)
 	if err != nil {
-		fmt.Println(err)
+		failedTransactions <- true
+		fmt.Println("transaction error: ", err)
 		return
 	}
 	defer resp.Body.Close()
@@ -190,15 +194,6 @@ func httpGet(urlReq string, headerKVSlice [][2]string, method string, body strin
 		fmt.Println(req.Proto, "| code:", resp.StatusCode, "|", fmt.Sprintf("%.3f", diffTime)+" 秒", "==>", req.Method, req.Host+req.URL.Path+"?"+req.URL.RawQuery)
 	} else {
 		fmt.Println(req.Proto, "| code:", resp.StatusCode, "|", fmt.Sprintf("%.3f", diffTime)+" 秒", "==>", req.Method, req.Host+req.URL.Path)
-	}
-
-	// 统计成功和失败
-	if resp.StatusCode == 200 {
-		// 成功 + 1
-		addTxCount <- true
-	} else {
-		// 失败 + 1
-		addTxCount <- false
 	}
 
 	// 统计最长最短时间
@@ -231,23 +226,17 @@ func replaceMaxMinValue(ch <-chan float64) {
 	}
 }
 
-func addTransactionStats(ch <-chan bool) {
+func failedTransactionCount(ch <-chan bool) {
 	defer waitStats.Done()
 
 	for {
 		select {
-		case v, ok := <-ch:
+		case _, ok := <-ch:
 			if !ok {
 				return
 			}
 
-			if v {
-				SuccessTransactions += 1
-				TotalTransactionCount += 1
-			} else {
-				FailedTransactions += 1
-				TotalTransactionCount += 1
-			}
+			FailedTransactions += 1
 		}
 	}
 }
