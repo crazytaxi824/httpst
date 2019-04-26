@@ -148,6 +148,7 @@ func main() {
 	fmt.Println("最长耗时:     	                ", fmt.Sprintf("%.3f", LongestTransaction)+" 秒")
 	fmt.Println("最短耗时:     	                ", fmt.Sprintf("%.3f", ShortestTransaction)+" 秒")
 	fmt.Println("总耗时:       	                ", fmt.Sprintf("%.3f", ElapsedTime)+" 秒")
+	fmt.Println()
 	//fmt.Printf("\n %c[1;40;33m%s%c[0m\n\n", 0x1B, "testPrintColor", 0x1B)
 }
 
@@ -163,7 +164,7 @@ func httpGet(urlReq, method, body string, headerKVSlice [][2]string, maxMinValue
 	//req, err := http.NewRequest(m, urlReq, body)
 	req, err := http.NewRequest(m, urlReq, strings.NewReader(body))
 	if err != nil {
-		fmt.Println(err)
+		fmt.Printf("%c[1;40;33m%s%c[0m\n", 0x1B, "Request ERROR: "+err.Error(), 0x1B)
 		return
 	}
 
@@ -178,8 +179,10 @@ func httpGet(urlReq, method, body string, headerKVSlice [][2]string, maxMinValue
 	//req.Header.Add("x-user-token", "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJvbkRUWDVYdzRmaU9OYUExQTBKNUZiRGNCeXo0IiwidW5pcXVlTmFtZSI6Im9uRFRYNVh3NGZpT05hQTFBMEo1RmJEY0J5ejQiLCJpZCI6IjExMTg4MTIxMjQ2MDk1MTU1MjAiLCJuYW1lIjoiTVJIIiwiZXhwIjoxNTU2MTA3NzkxfQ.XsmiYyS1ualsT6QyTdR6uSUPK5A3DbgLz9DJFLQKt6CMCmlw1pIr_uVLSs0IscdftvQK6l7Pw1PlTTuWiYVVzRrNROlvrtfdPtn_4l1JUVZMSFBOyx2uE7_BlHzCmStGrRG_x2PgG8rHbbpO-XXphVhN6Ln3lPnZhi5aARIWxAY")
 	resp, err := client.Do(req)
 	if err != nil {
+		// 统计请求失败数量
 		failedTransactions <- true
-		fmt.Println("transaction error: ", err)
+
+		fmt.Printf("%c[1;40;31m%s%c[0m\n", 0x1B, "ERROR: "+err.Error(), 0x1B)
 		return
 	}
 	defer resp.Body.Close()
