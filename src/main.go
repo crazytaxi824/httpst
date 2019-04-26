@@ -208,9 +208,17 @@ func httpSendRequest(urlReq, method, body string, headerKVSlice [][2]string, max
 
 	// 打印结果
 	if req.URL.RawQuery != "" {
-		fmt.Println(req.Proto, "| code:", resp.StatusCode, "|", fmt.Sprintf("%.3f", diffTime)+" 秒", "==>", req.Method, req.Host+req.URL.Path+"?"+req.URL.RawQuery)
+		if resp.StatusCode >= 200 && resp.StatusCode < 210 {
+			fmt.Println(req.Proto, "| code:", fmt.Sprintf("%c[0;40;33m%s%c[0m", 0x1B, fmt.Sprintf("%d", resp.StatusCode), 0x1B), "|", fmt.Sprintf("%.3f", diffTime)+" 秒", "==>", req.Method, req.Host+req.URL.Path+"?"+req.URL.RawQuery)
+		} else {
+			fmt.Println(req.Proto, "| code:", fmt.Sprintf("%c[1;40;31m%s%c[0m", 0x1B, fmt.Sprintf("%d", resp.StatusCode), 0x1B), "|", fmt.Sprintf("%.3f", diffTime)+" 秒", "==>", req.Method, req.Host+req.URL.Path+"?"+req.URL.RawQuery)
+		}
 	} else {
-		fmt.Println(req.Proto, "| code:", resp.StatusCode, "|", fmt.Sprintf("%.3f", diffTime)+" 秒", "==>", req.Method, req.Host+req.URL.Path)
+		if resp.StatusCode >= 200 && resp.StatusCode < 210 {
+			fmt.Println(req.Proto, "| code:", fmt.Sprintf("%c[0;40;33m%s%c[0m", 0x1B, fmt.Sprintf("%d", resp.StatusCode), 0x1B), "|", fmt.Sprintf("%.3f", diffTime)+" 秒", "==>", req.Method, req.Host+req.URL.Path)
+		} else {
+			fmt.Println(req.Proto, "| code:", fmt.Sprintf("%c[1;40;31m%s%c[0m", 0x1B, fmt.Sprintf("%d", resp.StatusCode), 0x1B), "|", fmt.Sprintf("%.3f", diffTime)+" 秒", "==>", req.Method, req.Host+req.URL.Path)
+		}
 	}
 
 	// 统计最长最短时间
