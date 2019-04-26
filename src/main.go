@@ -131,12 +131,24 @@ func main() {
 	fmt.Println()
 	fmt.Println("总请求数量:                     ", *users, "次")
 	fmt.Println("成功请求数量: 	                ", SuccessTransactions, "次")
-	fmt.Println("失败请求数量: 	                ", FailedTransactions, "次")
-	fmt.Println("请求成功率:                     ", fmt.Sprintf("%.2f", SuccessRate)+" %")
+
+	if FailedTransactions > 0 {
+		fmt.Printf("%c[1;40;31m%s%c[0m\n", 0x1B, "失败请求数量: 	                 "+fmt.Sprintf("%d", FailedTransactions)+"次", 0x1B)
+	} else {
+		fmt.Println("失败请求数量: 	                ", FailedTransactions, "次")
+	}
+
+	if SuccessRate < 100 {
+		fmt.Printf("%c[1;40;31m%s%c[0m\n", 0x1B, "请求成功率:                      "+fmt.Sprintf("%.2f", SuccessRate)+" %", 0x1B)
+	} else {
+		fmt.Printf("%c[1;40;33m%s%c[0m\n", 0x1B, "请求成功率:                      "+fmt.Sprintf("%.2f", SuccessRate)+" %", 0x1B)
+	}
+
 	fmt.Println("平均每秒处理请求数:             ", fmt.Sprintf("%.2f", TransactionRate)+" 次/秒")
 	fmt.Println("最长耗时:     	                ", fmt.Sprintf("%.3f", LongestTransaction)+" 秒")
 	fmt.Println("最短耗时:     	                ", fmt.Sprintf("%.3f", ShortestTransaction)+" 秒")
 	fmt.Println("总耗时:       	                ", fmt.Sprintf("%.3f", ElapsedTime)+" 秒")
+	//fmt.Printf("\n %c[1;40;33m%s%c[0m\n\n", 0x1B, "testPrintColor", 0x1B)
 }
 
 func httpGet(urlReq, method, body string, headerKVSlice [][2]string, maxMinValue chan<- float64, failedTransactions chan<- bool) {
