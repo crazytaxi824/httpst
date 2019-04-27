@@ -129,7 +129,7 @@ func main() {
 	for i < *users {
 		waitReq.Add(1)
 		// 发送请求
-		go httpSendRequest(reqData, signal)
+		go httpSendRequest(&reqData, signal)
 		i++
 	}
 
@@ -180,7 +180,7 @@ func main() {
 
 }
 
-func httpSendRequest(reqData RequestContext, signal Signal) {
+func httpSendRequest(reqData *RequestContext, signal Signal) {
 	defer waitReq.Done()
 
 	// 准备请求
